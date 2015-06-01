@@ -73,3 +73,6 @@ local.properties
 .loadpath
 .externalToolBuilders/
 *.launch
+
+# Exclude data
+dat/**
