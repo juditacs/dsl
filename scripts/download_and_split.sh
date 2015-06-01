@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [ -z $1 ]; then
+        echo "Usage: download_and_split.sh <data_folder>"
+        exit
+fi
 
 datadir=$1
 cd $1
