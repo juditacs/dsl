@@ -7,12 +7,18 @@ class PcaEncoder(object):
         self.dimension = dimension
         
     def train(self, data):
+        self.data = data
         self.model = PCA(n_components=self.dimension,whiten=True)
         self.model.fit(data)
         #print(self.model.explained_variance_ratio_)
         
     def encode(self, vector):
         return self.model.transform(vector)
+
+    @property
+    def repr_model(self):
+        return self.model.transform(self.data)
+
         
 if __name__ == '__main__':
     encoder = PcaEncoder(dimension=2)
