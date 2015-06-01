@@ -1,31 +1,48 @@
+# -*- coding: utf-8 -*-
 from argparse import ArgumentParser
 from collections import defaultdict
 from sys import stderr
+from nltk.tokenize import word_tokenize
 import math
 import os
+import re
+import string
+import json
+
+num_re = re.compile(r'^[0-9,.]+$', re.UNICODE)
+punct_re = re.compile(ur'[{0}{1}]'.format(string.punctuation, '“”«»'.decode('utf8')), re.UNICODE)
 
 
 def parse_args():
     p = ArgumentParser()
+    p.add_argument('comment', nargs='?', type=str, default='')
     p.add_argument('--train', type=str, help='train dir')
     p.add_argument('--test', type=str, help='test dir')
     p.add_argument('--tf', choices=['raw', 'binary', 'lognorm'], default='raw')
     p.add_argument('--idf', choices=['invfreq', 'smooth'], default='invfreq')
+    p.add_argument('--qf', choices=['lognorm', 'smooth', 'smoothnorm'], default='smooth')
     p.add_argument('--topn', type=int, default=100)
     p.add_argument('--rare', type=int, default=5)
     p.add_argument('--N', type=int, default=3)
+    p.add_argument('--lower', action='store_true', default=False)
     p.add_argument('--tokenize', choices=['ngram', 'word', 'mixed'], default='word')
+    p.add_argument('--dump-keywords', type=str, default='')
     return p.parse_args()
 
 
-def trim_word(word):
+def normalize_word(word):
+    if num_re.match(word):
+        return '_NUM_'
+    word = punct_re.sub('', word)
+    if args.lower:
+        word = word.lower()
     return word.strip()
 
 
 def tokenize(doc, args):
     if args.tokenize == 'word' or args.tokenize == 'mixed':
-        for word in doc.split():
-            tr = trim_word(word)
+        for word in word_tokenize(doc[0].lower() + doc[1:]):
+            tr = normalize_word(word)
             if tr:
                 yield tr
     if args.tokenize == 'ngram' or args.tokenize == 'mixed':
@@ -56,7 +73,7 @@ def tf_lognorm(doc_stream, args):
     tf = defaultdict(int)
     for line in doc_stream:
         for word in tokenize(line.decode('utf8').strip(), args):
-            trimmed = trim_word(word)
+            trimmed = normalize_word(word)
             if trimmed:
                 tf[trimmed] += 1
     tf_log = {}
@@ -69,7 +86,7 @@ def tf_binary(doc_stream, args):
     tf = defaultdict(int)
     for line in doc_stream:
         for word in tokenize(line.decode('utf8').strip(), args):
-            trimmed = trim_word(word)
+            trimmed = normalize_word(word)
             if trimmed:
                 tf[trimmed] = 1
     return tf
@@ -79,7 +96,7 @@ def tf_rawfreq(doc_stream, args):
     tf = defaultdict(int)
     for line in doc_stream:
         for word in tokenize(line.decode('utf8').strip(), args):
-            trimmed = trim_word(word)
+            trimmed = normalize_word(word)
             if trimmed:
                 tf[trimmed] += 1
     return tf
@@ -135,7 +152,7 @@ def tfidf(doc_tfs, idf, top=10):
         tfidf_top[doc] = {}
         n = top
         for term, score in sorted(terms.iteritems(), key=lambda x: -x[1])[:top]:
-            tfidf_top[doc][term] = n
+            tfidf_top[doc][term] = score
             n -= 1
     return tfidf_top
 
@@ -143,7 +160,8 @@ def tfidf(doc_tfs, idf, top=10):
 def train(args):
     dir_ = args.train
     doc_tfs = {}
-    for fn in os.listdir(dir_):
+    for fn in sorted(os.listdir(dir_)):
+        stderr.write(fn + '\n')
         with open(os.path.join(dir_, fn)) as f:
             doc_tfs[fn] = tf(f, args)
     idf_d = idf(doc_tfs, args.idf)
@@ -152,11 +170,17 @@ def train(args):
 
 def test(tfidf, idf, args):
     results = defaultdict(lambda: defaultdict(int))
-    for fn in os.listdir(args.test):
+    for fn in sorted(os.listdir(args.test)):
         with open(os.path.join(args.test, fn)) as f:
             for doc in f:
-                guess = classify_text(doc.decode('utf8'), tfidf, idf)
-                results[fn][guess] += 1
+                guess, allguess = classify_text(doc.decode('utf8'), tfidf, idf)
+                #if not fn == guess[0]:
+                #allguess_str = ','.join('{0}:{1}'.format(k, v) for k, v in allguess.iteritems())
+                #print('{0}\t{1}\t{2}\t{3}\t{4}'.format(fn, guess[0], guess[1], doc.strip(), allguess_str))
+                #tr = allguess[fn]
+                #print('{0}\t{1}'.format(fn, '\t'.join('{0}\t{1}\t{2}'.format(k, v, v / tr) for k, v in sorted(allguess.iteritems(), key=lambda x: -x[1]))))
+                #print(' '.join(str(v / 1000) for k, v in sorted(allguess.iteritems(), key=lambda x: x[0])) + ' ' + str(len(doc.decode('utf8').split()) + ' ' + str(len(allguess))))
+                results[fn][guess[0]] += 1
     return results
 
 
@@ -164,21 +188,23 @@ def classify_text(doc, tfidf, idf):
     hits = defaultdict(int)
     test_terms = get_test_terms(doc, idf)
     for term, weight in test_terms.iteritems():
-        tr = trim_word(term)
+        tr = normalize_word(term)
         if not tr.strip():
             continue
         for lang, terms in tfidf.iteritems():
             if term in terms:
+                #print lang, term.encode('utf8'), terms[term], weight, terms[term] * weight
+                in_test[lang].add(term)
                 hits[lang] += terms[term] * weight
     if not hits:
-        return 'UN'
-    return max(hits.iteritems(), key=lambda x: x[1])[0]
+        return ('UN', 0), {}
+    return max(hits.iteritems(), key=lambda x: x[1]), hits
 
 
 def get_test_terms(doc, idf):
     words = defaultdict(int)
     for w in doc.split():
-        tr = trim_word(w)
+        tr = normalize_word(w)
         if tr:
             words[tr] += 1
     weights = {}
@@ -186,7 +212,12 @@ def get_test_terms(doc, idf):
     for word, f in words.iteritems():
         if not word in idf:
             continue
-        weights[word] = (0.5 + 0.5 * float(f) / max_f) * idf[word]
+        if args.qf == 'smooth':
+            weights[word] = (0.5 + 0.5 * float(f) / max_f) * idf[word]
+        elif args.qf == 'lognorm':
+            weights[word] = math.log(1 + idf[word])
+        elif args.qf == 'smoothnorm':
+            weights[word] = (1 + float(f)) * idf[word]
     return weights
 
 
@@ -197,19 +228,31 @@ def print_stats(t):
         good += guesses.get(tr, 0)
         N += sum(guesses.itervalues())
     t['acc'] = float(good) / N
-    import json
     print json.dumps(t)
+    return t
+
+
+in_test = defaultdict(set)
 
 
 def main():
-    args = parse_args()
     tfidf, idf = train(args)
     stderr.write('Trained\n')
-#    for lang, terms in topn.iteritems():
-#        for term, score in terms:
-#            print(u'{0}\t{1}\t{2}'.format(lang, term, score).encode('utf8'))
+    if args.dump_keywords:
+        with open(args.dump_keywords, 'w') as f:
+            for lang, terms in sorted(tfidf.iteritems()):
+                for term, score in sorted(terms.iteritems(), key=lambda x: -x[1]):
+                    f.write(u'{0}\t{1}\t{2}\n'.format(lang, term, score).encode('utf8'))
     t = test(tfidf, idf, args)
-    print_stats(t)
+    for lang, s in sorted(in_test.iteritems()):
+        print lang, len(s)
+    stats = print_stats(t)
+    with open('res/global_stats', 'a+') as f:
+        if args.comment:
+            f.write('{0}\t{1}\t{2}\n'.format('\t'.join(map(str, (args.train, args.test, args.topn, args.tokenize, args.tf, args.idf, args.qf, args.rare, args.lower))), json.dumps(stats)), args.comment)
+        else:
+            f.write('{0}\t{1}\n'.format('\t'.join(map(str, (args.train, args.test, args.topn, args.tokenize, args.tf, args.idf, args.qf, args.rare, args.lower))), json.dumps(stats)))
 
 if __name__ == '__main__':
+    args = parse_args()
     main()
