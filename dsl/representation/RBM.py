@@ -193,7 +193,7 @@ class RBM:
 if __name__ == '__main__':
     encoder = RbmEncoder(visibleDimension=6, hiddenDimension=2)
     encoder.train(np.array([[1,1,1,0,0,0],[1,0,1,0,0,0],[1,1,1,0,0,0],[0,0,1,1,1,0], [0,0,1,1,0,0],[0,0,1,1,1,0]]))
-    encoded=encoder.encode(np.array([0,0,0,1,1,0]))
+    encoded=encoder.encode(np.array([[0,0,0,1,1,0]]))
     #encoded=encoder.encode(np.array([1,1,1,1,1,1]))
     print(encoded)
 
