@@ -8,15 +8,26 @@ class RbmEncoder(object):
         self.hiddenDimension = hiddenDimension
         self.visibleDimension = None
         self.model = None
+        self._repr_model = None
 
     def train(self, data):
+        self.data = data
         if self.model is None:
             self.visibleDimension = data.shape[1]
             self.model = RBM(self.visibleDimension, self.hiddenDimension)
         self.model.train(data)
 
     def encode(self, vector):
-        self.model.run_visible(vector)
+        return self.model.run_visible(np.array([vector]))[0]
+
+    @property
+    def repr_model(self):
+        if self._repr_model is None:
+            self._repr_model = np.zeros((len(self.data), self.hiddenDimension))
+            for i, d in enumerate(self.data):
+                encoded = self.encode(d)
+                self._repr_model[i] = encoded
+        return self._repr_model
 
 
 class RBM:
