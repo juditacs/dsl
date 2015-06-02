@@ -3,12 +3,15 @@ import numpy as np
 
 class RbmEncoder(object):
 
-    def __init__(self, visibleDimension, hiddenDimension):
-        self.visibleDimension = visibleDimension
+    def __init__(self, hiddenDimension):
         self.hiddenDimension = hiddenDimension
-        self.model = RBM(visibleDimension, hiddenDimension)
+        self.visibleDimension = None
+        self.model = None
         
     def train(self, data):
+        if self.model is None:
+            self.visibleDimension = data.shape[1]
+            self.model = RBM(self.visibleDimension, self.hiddenDimension)
         self.model.train(data)
 
     def encode(self, vector):
