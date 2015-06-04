@@ -1,5 +1,5 @@
 from sklearn.naive_bayes import GaussianNB
-
+from sklearn import svm
 
 class BaseClassifier(object):
 
@@ -10,6 +10,8 @@ class BaseClassifier(object):
                 return NaiveBayesClassifier()
             if cl_name.lower() == 'simple':
                 return SimpleClassifier(*args, **kwargs)
+            if cl_name.lower() == 'svm':
+                return SVMClassifier(*args, **kwargs)
         raise ValueError('Unknown classifier: {}'.format(cl_name))
 
 
@@ -33,3 +35,16 @@ class NaiveBayesClassifier(BaseClassifier):
 
     def classify_vector(self, vector):
         return self.gnb.predict(vector)
+
+
+class SVMClassifier(BaseClassifier):
+
+    def __init__(self, *args, **kwargs):
+        self.clf = svm.SVC(*args, **kwargs)
+
+    def train(self, model, target):
+        self.clf.fit(model, target)
+    
+    def classify_vector(self, vector):
+        return self.clf.predict(vector)
+
