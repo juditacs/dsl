@@ -41,7 +41,16 @@ class NaiveBayesClassifier(BaseClassifier):
 class SVMClassifier(BaseClassifier):
 
     def __init__(self, *args, **kwargs):
-        self.clf = svm.SVC(*args, **kwargs)
+        ktype = kwargs['ktype'].lower()
+        del kwargs['ktype']
+        if ktype == 'svc':
+            self.clf = svm.SVC(*args, **kwargs)
+        elif ktype == 'linearsvc':
+            self.clf = svm.LinearSVC(*args, **kwargs)
+        elif ktype == 'nusvc':
+            self.clf = svm.NuSVC(*args, **kwargs)
+        else:
+            raise ValueError('Unknown SVM type: {0}'.format(ktype))
 
     def train(self, model, target):
         self.clf.fit(model, target)

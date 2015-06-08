@@ -1,5 +1,6 @@
 import string
 import re
+import math
 from os import listdir, path
 from collections import defaultdict
 from nltk.tokenize import word_tokenize
@@ -51,11 +52,18 @@ class Tokenizer(object):
 class CharacterNgram(object):
 
     @staticmethod
-    def count_ngrams(text, cnt=None, N=3, padding=False):
+    def count_ngrams(text, cnt=None, N=3, padding=False, include_shorter=True):
         if cnt is None:
             cnt = defaultdict(int)
         for i in xrange(0, len(text) - N + 1):
+            ngram = cnt[text[i:i + N]]
+            if include_shorter:
+                for j in xrange(1, N):
+                    cnt[text[i:i + j]] += 1
             cnt[text[i:i + N]] += 1
+        if include_shorter:
+            for i in xrange(len(text) - N + 1, len(text)):
+                cnt[text[i:]] += 1
         return cnt
 
     @staticmethod
@@ -94,9 +102,16 @@ class FeatDict(object):
     def __init__(self):
         self.features = {}
         self.max_i = 0
+        self._rev_d = None
+        self.freeze = False
+
+    def freeze_dict(self):
+        self.freeze = True
 
     def __getitem__(self, item):
         if not item in self.features:
+            if self.freeze:
+                return None
             self.features[item] = self.max_i
             self.max_i += 1
         return self.features[item]
@@ -104,10 +119,15 @@ class FeatDict(object):
     def __len__(self):
         return len(self.features)
 
+    def rev_lookup(self, item):
+        if self._rev_d is None:
+            self._rev_d = {v: k for k, v in self.features.iteritems()}
+        return self._rev_d[item]
+
     def save(self, fn='features'):
         with open(fn, 'w') as f:
-            for k, v in sorted(self.features):
-                f.write(u'{0}\t{1}\n'.format(v, k))
+            for k, v in sorted(self.features.iteritems()):
+                f.write(u'{0}\t{1}\n'.format(v, k).encode('utf8'))
 
     def load(self, fn='features'):
         with open(fn) as f:
@@ -123,6 +143,22 @@ class FeatList(object):
     def __init__(self):
         self.features = FeatDict()
         self.l = []
+        self._rev_d = None
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, ind):
+        return self.l[ind]
+
+    def __iter__(self):
+        for lab in self.l:
+            yield lab
+
+    def rev_lookup(self, item):
+        if self._rev_d is None:
+            self._rev_d = {v: k for k, v in self.features.features.iteritems()}
+        return self._rev_d[item]
 
     def append(self, item):
         self.l.append(self.features[item])
@@ -138,17 +174,104 @@ class Featurizer(object):
         self.labels = FeatList()
 
     def featurize_in_directory(self, basedir):
-        for fn in sorted(listdir(basedir)):
+        self.docs = []
+        for fn in sorted(filter(lambda x: not x.endswith('.swp'), listdir(basedir))):
             with open(path.join(basedir, fn)) as f:
-                self.labels.append(fn)
-                docs = []
                 for l in f:
-                    docs.append({self.featdict[k]: min((v, 0xffff)) for k, v in self.extractor(self.tokenizer, l, self.N).iteritems()})
-        return docs
+                    self.labels.append(fn)
+                    newd = {}
+                    for k, v in self.extractor(self.tokenizer, l, self.N, padding=True).iteritems():
+                        featname = self.featdict[k]
+                        if featname is None:
+                            continue
+                        newd[featname] = min((v, 0xffff))
+                    self.docs.append(newd)
+                    #self.docs.append({self.featdict[k]: min((v, 0xffff)) for k, v in self.extractor(self.tokenizer, l, self.N).iteritems()})
+        return self.docs
 
-    def to_dok_matrix(self, docs):
-        mtx = dok_matrix((len(docs), len(self.featdict)), dtype=np.int16)
-        for i, doc in enumerate(docs):
+    def get_correlations(self):
+        label_mean, label_dev = self.get_label_mean_dev()
+        self.label_mean = label_mean
+        self.label_dev = label_dev
+        feat_mean, feat_dev = self.get_feat_mean_dev()
+        self.feat_mean = feat_mean
+        self.feat_dev = feat_dev
+
+    def get_feat_mean_dev(self):
+        m = [0 for _ in xrange(len(self.featdict))]
+        msq = [0 for _ in xrange(len(self.featdict))]
+        for doc in self.docs:
+            for feat, val in doc.iteritems():
+                m[feat] += val
+                msq[feat] += val ** 2
+        N = float(len(self.docs))
+        dev = []
+        for i in xrange(len(m)):
+            msq[i] /= N
+            m[i] /= N
+            dev.append(math.sqrt(msq[i] - m[i] ** 2))
+        return m, dev
+
+    def get_label_mean_dev(self):
+        m = [0 for _ in range(len(self.labels))]
+        for label in self.labels:
+            m[label] += 1
+        dev = []
+        for i in xrange(len(m)):
+            m[i] = m[i] / float(len(self.docs))
+            dev.append(math.sqrt(m[i] - m[i] ** 2))
+        return m, dev
+
+    def label_feat_pearson(self):
+        pearson = [[0 for i in range(len(self.labels))] for _ in range(len(self.featdict))]
+        for doc_i, doc in enumerate(self.docs):
+            doc_label = self.labels[doc_i]
+            for i in xrange(len(self.featdict)):
+                doc_val = doc.get(i, 0)
+                pdoc = (doc_val - self.feat_mean[i])
+                for lab_i in xrange(len(self.labels.features)):
+                    lab_val = 1 if doc_label == lab_i else 0
+                    pval = lab_val - self.label_mean[lab_i]
+                    pearson[i][lab_i] += pdoc * pval
+        for i in xrange(len(pearson)):
+            for j in xrange(len(pearson[0])):
+                if not self.feat_dev[i] == 0 and not self.label_dev[lab_i] == 0:
+                    pearson[i][j] /= (self.feat_dev[i] * self.label_dev[j]) * len(self.docs)
+                else:
+                    pearson[i][j] = 0
+        self.pearson = pearson
+
+    def save_features(self, fn):
+        with open(fn, 'w') as f:
+            for doc in self.docs:
+                out_l = []
+                for ngram in self.topngrams:
+                    out_l.append(doc.get(ngram, 0))
+                f.write(' '.join(map(str, out_l)) + '\n')
+
+    def filter_ngrams(self, docs, filt):
+        feat_filt = []
+        for doc in docs:
+            feat_filt.append({})
+            for feat, val in doc.iteritems():
+                if feat in filt:
+                    feat_filt[-1][feat] = val
+        return feat_filt
+
+    def filter_top_ngrams(self, topn):
+        self.pearson_filt = sorted(enumerate(self.pearson), key=lambda x: max(map(abs, x[1])), reverse=True)[:topn]
+        self.topngrams = set(i[0] for i in self.pearson_filt)
+        feat_filt = []
+        for doc in self.docs:
+            feat_filt.append({})
+            for feat, val in doc.iteritems():
+                if feat in self.topngrams:
+                    feat_filt[-1][feat] = val
+        self.docs = feat_filt
+
+    def to_dok_matrix(self):
+        mtx = dok_matrix((len(self.docs), len(self.featdict)), dtype=np.int16)
+        for i, doc in enumerate(self.docs):
             for j, val in doc.iteritems():
                 mtx[(i, j)] = val
         return mtx
