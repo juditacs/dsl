@@ -1,5 +1,6 @@
 from sklearn.naive_bayes import GaussianNB
 from sklearn import svm
+from nltk.classify.maxent import MaxentClassifier
 
 class BaseClassifier(object):
 
@@ -48,3 +49,13 @@ class SVMClassifier(BaseClassifier):
     def classify_vector(self, vector):
         return self.clf.predict(vector)
 
+class MaxEntClassifier(BaseClassifier):
+
+    def __init__(self, *args, **kwargs):
+        self.maxent = MaxentClassifier(*args, **kwargs)
+
+    def train(self, model, target):
+        self.maxent.train(zip([{i:v for (i,v) in enumerate(l)} for l in model], target))
+
+    def classify_vector(self, vector):
+        return self.maxent.prob_classify({i:v for (i,v) in enumerate(l)})
