@@ -1,6 +1,5 @@
 from sys import stderr, stdin, argv
 from model import Representation
-from nltk.classify.maxent import MaxentFeatureEncodingI
 import numpy as np
 
 
@@ -40,7 +39,7 @@ def main():
     mtx = np.loadtxt(stdin, np.float)
     labels = mtx[:, 0]
     train = mtx[:, 1:]
-    r = Representation('dummy', 'svm', rbm_hiddenDimension=10, simple_field=3, maxent_encoding=MaxentFeatureEncodingI(), pca_dimension=50, svm_ktype='svc', svm_kernel='linear')
+    r = Representation('dummy', 'svm', rbm_hiddenDimension=10, simple_field=3, pca_dimension=50, svm_ktype='svc', svm_kernel='linear')
     r.encode(train)
     stderr.write('Encoded\n')
     r.train_classifier(labels)
