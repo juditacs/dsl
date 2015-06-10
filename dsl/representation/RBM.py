@@ -1,21 +1,34 @@
 from __future__ import print_function
 import numpy as np
 
+
 class RbmEncoder(object):
 
     def __init__(self, hiddenDimension):
         self.hiddenDimension = hiddenDimension
         self.visibleDimension = None
         self.model = None
-        
+        self._repr_model = None
+
     def train(self, data):
+        self.data = data
         if self.model is None:
             self.visibleDimension = data.shape[1]
             self.model = RBM(self.visibleDimension, self.hiddenDimension)
         self.model.train(data)
 
     def encode(self, vector):
-        self.model.run_visible([vector])
+        return self.model.run_visible(np.array([vector]))[0]
+
+    @property
+    def repr_model(self):
+        if self._repr_model is None:
+            self._repr_model = np.zeros((len(self.data), self.hiddenDimension))
+            for i, d in enumerate(self.data):
+                encoded = self.encode(d)
+                self._repr_model[i] = encoded
+        return self._repr_model
+
 
 class RBM:
     
@@ -70,7 +83,7 @@ class RBM:
             self.weights += self.learning_rate * ((pos_associations - neg_associations) / num_examples)
 
             error = np.sum((data - neg_visible_probs) ** 2)
-            print("Epoch %s: error is %s" % (epoch, error))
+            #print("Epoch %s: error is %s" % (epoch, error))
 
     def run_visible(self, data):
         """
@@ -194,7 +207,7 @@ class RBM:
         return 1.0 / (1 + np.exp(-x))
 
 if __name__ == '__main__':
-    encoder = RbmEncoder(visibleDimension=6, hiddenDimension=2)
+    encoder = RbmEncoder(hiddenDimension=2)
     encoder.train(np.array([[1,1,1,0,0,0],[1,0,1,0,0,0],[1,1,1,0,0,0],[0,0,1,1,1,0], [0,0,1,1,0,0],[0,0,1,1,1,0]]))
     encoded=encoder.encode(np.array([[0,0,0,1,1,0]]))
     #encoded=encoder.encode(np.array([1,1,1,1,1,1]))

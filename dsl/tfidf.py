@@ -169,17 +169,14 @@ def train(args):
 
 
 def test(tfidf, idf, args):
+    langs = sorted(os.listdir(args.test))
     results = defaultdict(lambda: defaultdict(int))
     for fn in sorted(os.listdir(args.test)):
         with open(os.path.join(args.test, fn)) as f:
             for doc in f:
                 guess, allguess = classify_text(doc.decode('utf8'), tfidf, idf)
-                #if not fn == guess[0]:
-                #allguess_str = ','.join('{0}:{1}'.format(k, v) for k, v in allguess.iteritems())
-                #print('{0}\t{1}\t{2}\t{3}\t{4}'.format(fn, guess[0], guess[1], doc.strip(), allguess_str))
-                #tr = allguess[fn]
-                #print('{0}\t{1}'.format(fn, '\t'.join('{0}\t{1}\t{2}'.format(k, v, v / tr) for k, v in sorted(allguess.iteritems(), key=lambda x: -x[1]))))
-                #print(' '.join(str(v / 1000) for k, v in sorted(allguess.iteritems(), key=lambda x: x[0])) + ' ' + str(len(doc.decode('utf8').split()) + ' ' + str(len(allguess))))
+                prob_str = ' '.join(str(allguess.get(l, 0)) for l in langs)
+                print('{0} {1} {2} {3} {4}'.format(langs.index(fn), langs.index(guess[0]), prob_str, len(doc.decode('utf8').split()), len(allguess)))
                 results[fn][guess[0]] += 1
     return results
 
