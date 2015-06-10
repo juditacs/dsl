@@ -132,7 +132,7 @@ if __name__ == '__main__':
         [_, _, V] = np.linalg.svd(X)
         return V
 
-    N = 18000
+    N = 1800
     #obs = np.matrix([np.random.normal(size=10) for _ in xrange(N)])
     obs = np.matrix(np.random.random((10,N))).transpose()
 
@@ -157,9 +157,10 @@ if __name__ == '__main__':
     ru = U.transpose() * tobs
     rv = V.transpose() * tobs
     rw = W.transpose() * tobs
-    print ru-rv
-    print ru-rw
-    print rv-rw
+    print ru
+    #print ru-rv
+    #print ru-rw
+    #print rv-rw
     # print obs[1,:] * U
     # print 
     # print pcaEncoder.encode(obs[1,:].transpose())
