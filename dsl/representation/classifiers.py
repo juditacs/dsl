@@ -1,6 +1,7 @@
 from sklearn.naive_bayes import GaussianNB
 from sklearn import svm
-from nltk.classify.maxent import MaxentClassifier
+from sklearn.linear_model import LogisticRegression
+
 
 class BaseClassifier(object):
 
@@ -13,6 +14,8 @@ class BaseClassifier(object):
                 return SimpleClassifier(*args, **kwargs)
             if cl_name.lower() == 'svm':
                 return SVMClassifier(*args, **kwargs)
+            if cl_name.lower() == 'logreg':
+                return LogisticRegressionWrapper(*args, **kwargs)
         raise ValueError('Unknown classifier: {}'.format(cl_name))
 
 
@@ -54,17 +57,18 @@ class SVMClassifier(BaseClassifier):
 
     def train(self, model, target):
         self.clf.fit(model, target)
-    
+
     def classify_vector(self, vector):
         return self.clf.predict(vector)
 
-class MaxEntClassifier(BaseClassifier):
+
+class LogisticRegressionWrapper(BaseClassifier):
 
     def __init__(self, *args, **kwargs):
-        self.maxent = MaxentClassifier(*args, **kwargs)
+        self.clf = LogisticRegression(*args, **kwargs)
 
     def train(self, model, target):
-        self.maxent.train(zip([{i:v for (i,v) in enumerate(l)} for l in model], target))
+        self.clf.fit(model, target)
 
     def classify_vector(self, vector):
-        return self.maxent.prob_classify({i:v for (i,v) in enumerate(l)})
+        return self.clf.predict(vector)
