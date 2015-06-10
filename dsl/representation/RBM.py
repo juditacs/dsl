@@ -4,18 +4,24 @@ import numpy as np
 
 class RbmEncoder(object):
 
-    def __init__(self, hiddenDimension):
-        self.hiddenDimension = hiddenDimension
+    def __init__(self, latentDimension):
+        self.latentDimension = latentDimension
         self.visibleDimension = None
         self.model = None
+        self.data = None
         self._repr_model = None
+
+    def trainOne(self, vector):
+        if self.model is None:
+            self.visibleDimension = vector.shape[0]
+            self.model = RBM(self.visibleDimension, self.latentDimension)
+        self.model.train(np.array([vector]))
 
     def train(self, data):
         self.data = data
-        if self.model is None:
-            self.visibleDimension = data.shape[1]
-            self.model = RBM(self.visibleDimension, self.hiddenDimension)
-        self.model.train(data)
+        for row in data:
+            self.trainOne(row)
+        #np.apply_along_axis(self.trainOne, axis=1, arr=matrix )
 
     def encode(self, vector):
         return self.model.run_visible(np.array([vector]))[0]
@@ -207,15 +213,8 @@ class RBM:
         return 1.0 / (1 + np.exp(-x))
 
 if __name__ == '__main__':
-    encoder = RbmEncoder(hiddenDimension=2)
-    encoder.train(np.array([[1,1,1,0,0,0],[1,0,1,0,0,0],[1,1,1,0,0,0],[0,0,1,1,1,0], [0,0,1,1,0,0],[0,0,1,1,1,0]]))
-    encoded=encoder.encode(np.array([[0,0,0,1,1,0]]))
-    #encoded=encoder.encode(np.array([1,1,1,1,1,1]))
-    print(encoded)
-
-    r = RBM(num_visible = 6, num_hidden = 2)
-    training_data = np.array([[1,1,1,0,0,0],[1,0,1,0,0,0],[1,1,1,0,0,0],[0,0,1,1,1,0], [0,0,1,1,0,0],[0,0,1,1,1,0]])
-    r.train(training_data, max_epochs = 5000)
-    print(r.weights)
-    user = np.array([[0,0,0,1,1,0]])
-    print(r.run_visible(user))
+    with open("../../dat/testMatrix.small.txt") as f:
+        obs = np.loadtxt(f, np.int32)
+    encoder = RbmEncoder(latentDimension=30)
+    encoder.train(obs)
+    print(encoder.encode(obs[1, :]))
