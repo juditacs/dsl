@@ -1,5 +1,6 @@
 from PCA import PcaEncoder
 from RBM import RbmEncoder
+from IPCA import IpcaEncoder
 
 
 class BaseEncoder(object):
@@ -13,6 +14,8 @@ class BaseEncoder(object):
                 return DummyEncoder()
             if enc_name.lower() == 'rbm':
                 return RbmEncoder(*args, **kwargs)
+            if enc_name.lower() == 'ipca':
+                return IpcaEncoder(*args, **kwargs)
         raise ValueError('Unknown encoder: {}'.format(enc_name))
 
 class DummyEncoder(BaseEncoder):
