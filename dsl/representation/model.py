@@ -7,11 +7,13 @@ class Representation(object):
     def __init__(self, encoder, classifier, *args, **kwargs):
         enc_args = {}
         cl_args = {}
+        klen = len(encoder) + 1
+        clen = len(classifier) + 1
         for k, v in kwargs.iteritems():
             if k.startswith(encoder):
-                enc_args[k.lstrip(encoder + '_')] = v
+                enc_args[k[klen:]] = v
             elif k.startswith(classifier):
-                cl_args[k.lstrip(classifier + '_')] = v
+                cl_args[k[clen:]] = v
         self.encoder = BaseEncoder.lookup_encoder(encoder, **enc_args)
         self.classifier = BaseClassifier.lookup_classifier(classifier, **cl_args)
 
