@@ -20,7 +20,7 @@ def parse_args():
     p.add_argument('--test', type=str, help='test dir')
     p.add_argument('--tf', choices=['raw', 'binary', 'lognorm'], default='raw')
     p.add_argument('--idf', choices=['invfreq', 'smooth'], default='invfreq')
-    p.add_argument('--qf', choices=['lognorm', 'smooth', 'smoothnorm'], default='smooth')
+    p.add_argument('--qf', choices=['raw', 'lognorm', 'smooth', 'smoothnorm'], default='smooth')
     p.add_argument('--topn', type=int, default=100)
     p.add_argument('--rare', type=int, default=5)
     p.add_argument('--N', type=int, default=3)
@@ -215,6 +215,8 @@ def get_test_terms(doc, idf):
             weights[word] = math.log(1 + idf[word])
         elif args.qf == 'smoothnorm':
             weights[word] = (1 + float(f)) * idf[word]
+        elif args.qf == 'raw':
+            weights[word] = f
     return weights
 
 
