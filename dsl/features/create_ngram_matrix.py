@@ -7,14 +7,18 @@ from dsl.representation.model import Representation
 
 def main():
     N = int(argv[1]) if len(argv) > 1 else 3
-    t = Tokenizer()
+    t = Tokenizer(filter_punct=True, ws_norm=True, strip=True, replace_digits=True)
     f = Featurizer(t, N=N)
     f.featurize_in_directory(argv[2])
+    stderr.write('Featurized\n')
     #m = f.to_dok_matrix(docs)
     f.get_correlations()
+    stderr.write('Means computed\n')
     f.label_feat_pearson()
+    stderr.write('Correlations computed\n')
     cut = int(argv[4]) if len(argv) > 4 else 40
     f.filter_top_ngrams(cut)
+    stderr.write('Top ngrams filtered\n')
     f.save_features('train_features')
     mtx = f.to_dok_matrix()
     with open('train_mtx.cPickle', 'wb') as fh:
@@ -30,7 +34,6 @@ def main():
     test_f.topngrams = f.topngrams
     test_f.save_features('test_features')
     test_f.featdict.save('topfeatures')
-    return
     test_mtx = test_f.to_dok_matrix()
     with open('test_mtx.cPickle', 'wb') as fh:
         cPickle.dump((test_f.labels.l, test_mtx), fh, -1)
