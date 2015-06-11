@@ -6,7 +6,7 @@ setup(
     name='dsl',
     provides=['dsl'],
     url='https://github.com/juditacs/dsl',
-    packages=['dsl', 'dsl.representation', 'dsl.features'],
+    packages=['dsl', 'dsl.representation', 'dsl.features', 'dsl.utils'],
     package_dir={'': '.'},
     include_package_data=True,
     zip_safe=False,
