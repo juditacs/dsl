@@ -6,23 +6,28 @@ __author__ = "Micha Kalfon"
 
 class IpcaEncoder(object):
 
-    def __init__(self, pcaDimension):
-        self.pcaDimension = pcaDimension
+    def __init__(self, latentDimension):
+        self.latentDimension = latentDimension
         self.sampleDimension = None
         self.model = None
         
-    def train(self, vector):
+    def trainOne(self, vector):
         if self.model is None:
             # The size of the vector
             self.sampleDimension = vector.shape[0]
-            self.model = IPCA(self.sampleDimension, self.pcaDimension)
-        self.model.update(vector)
+            self.model = IPCA(self.sampleDimension, self.latentDimension)
+        self.model.update(np.matrix(vector).transpose())
+        
+    def train(self, matrix):
+        for row in matrix:
+            self.trainOne(row)
+        #np.apply_along_axis(self.trainOne, axis=1, arr=matrix )
         
     def encode(self, vector):
         if self.model is None:
             raise "The model is not trained, yet"
         # Select the first n PCA components and multiple the vector with it.
-        return self.model.components.transpose() * vector
+        return self.model.components.transpose() * np.matrix(vector).transpose()
 
     def getModel(self):
         return self.model.components
@@ -125,43 +130,8 @@ def _is_zero(x):
 
 
 if __name__ == '__main__':
-    import sys
-
-    def pca_svd(X):
-        X = X - X.mean(0).repeat(X.shape[0], 0)
-        [_, _, V] = np.linalg.svd(X)
-        return V
-
-    N = 1800
-    #obs = np.matrix([np.random.normal(size=10) for _ in xrange(N)])
-    obs = np.matrix(np.random.random((10,N))).transpose()
-
-    ipcaEncoder = IpcaEncoder(2)
-    ipca = IPCA(obs.shape[1], 2)
-    ipca = IPCA(10, 2)
-    for i in xrange(obs.shape[0]):
-        x = obs[i, :].transpose()
-        ipca.update(x)
-        ipcaEncoder.train(x)
-
-    U = pca_svd(obs)[0:2].transpose()
-    V = ipca.components
-    W = ipcaEncoder.getModel()
-
-    # print V
-    # print U
-    # print U-V
-    # print U-W
-    # print V-W
-    tobs = obs[1, :].transpose()
-    ru = U.transpose() * tobs
-    rv = V.transpose() * tobs
-    rw = W.transpose() * tobs
-    print ru
-    #print ru-rv
-    #print ru-rw
-    #print rv-rw
-    # print obs[1,:] * U
-    # print 
-    # print pcaEncoder.encode(obs[1,:].transpose())
-    # print U - pcaEncoder.getModel()
+    with open("../../dat/testMatrix.small.txt") as f:
+        obs = np.loadtxt(f, np.int32)
+    encoder = IpcaEncoder(latentDimension=50)
+    encoder.train(obs)
+    print(encoder.encode(obs[1, :]))

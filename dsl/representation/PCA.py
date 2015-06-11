@@ -1,12 +1,12 @@
 from sklearn.decomposition import PCA
-import numpy
+import numpy as np
 
 
 class PcaEncoder(object):
 
-    def __init__(self, dimension):
-        self.dimension = dimension
-        self.model = PCA(n_components=self.dimension, whiten=True)
+    def __init__(self, latentDimension):
+        self.latentDimension = latentDimension
+        self.model = PCA(n_components=self.latentDimension, whiten=True)
 
     def train(self, data):
         self.data = data
@@ -14,7 +14,7 @@ class PcaEncoder(object):
         #print(self.model.explained_variance_ratio_)
 
     def encode(self, vector):
-        return self.model.transform(vector.transpose()).transpose()
+        return self.model.transform(vector).transpose()
 
     @property
     def repr_model(self):
@@ -22,12 +22,8 @@ class PcaEncoder(object):
 
 
 if __name__ == '__main__':
-    N = 18000
-    obs = numpy.matrix(numpy.random.random((10,N))).transpose()
-    encoder = PcaEncoder(dimension=2)
-    #encoder.train(numpy.array([[1,1,1,0,0,0],[1,0,1,0,0,0],[1,1,1,0,0,0],[0,0,1,1,1,0], [0,0,1,1,0,0],[0,0,1,1,1,0]]))
-    #encoded=encoder.encode(numpy.array([1,1,1,1,1,1]))
+    with open("../../dat/testMatrix.small.txt") as f:
+        obs = np.loadtxt(f, np.int32)
+    encoder = PcaEncoder(latentDimension=50)
     encoder.train(obs)
-    tobs = obs[1, :].transpose()
-    encoded=encoder.encode(tobs)
-    print(encoded)
+    print(encoder.encode(obs[1, :]))
