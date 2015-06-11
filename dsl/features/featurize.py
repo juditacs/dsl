@@ -2,10 +2,12 @@ import string
 import re
 import math
 from os import listdir, path
+from sys import stderr
 from collections import defaultdict
 from nltk.tokenize import word_tokenize
 from scipy.sparse import dok_matrix
 import numpy as np
+from dsl.utils.pearson import pearson_mtx
 
 
 class Tokenizer(object):
@@ -51,12 +53,23 @@ class Tokenizer(object):
 
 class CharacterNgram(object):
 
+    def __init__(self, tokenizer):
+        self.ngrams = defaultdict(int)
+        self.tokenizer = tokenizer
+
+    def count_in_directory(self, basedir, N, padding=False):
+        for fn in sorted(filter(lambda x: not x.endswith('.swp'), listdir(basedir))):
+            with open(path.join(basedir, fn)) as f:
+                CharacterNgram.tokenize_stream_and_count(self.tokenizer, f, N=N, padding=padding, cnt=self.ngrams)
+
+    def get_frequent(self, threshold):
+        return {k: v for k, v in self.ngrams.iteritems() if v >= threshold}
+
     @staticmethod
     def count_ngrams(text, cnt=None, N=3, padding=False, include_shorter=True):
         if cnt is None:
             cnt = defaultdict(int)
         for i in xrange(0, len(text) - N + 1):
-            ngram = cnt[text[i:i + N]]
             if include_shorter:
                 for j in xrange(1, N):
                     cnt[text[i:i + j]] += 1
@@ -67,8 +80,9 @@ class CharacterNgram(object):
         return cnt
 
     @staticmethod
-    def tokenize_stream_and_count(tokenizer, stream, N=3, padding=False):
-        cnt = defaultdict(int)
+    def tokenize_stream_and_count(tokenizer, stream, N=3, padding=False, cnt=None):
+        if cnt is None:
+            cnt = defaultdict(int)
         for sentence in tokenizer.tokenize_stream(stream):
             if padding:
                 text = (' ' * (N - 1)).join(sentence)
@@ -163,6 +177,12 @@ class FeatList(object):
     def append(self, item):
         self.l.append(self.features[item])
 
+    def to_dense_mtx(self):
+        mtx = np.zeros((len(self.l), len(self.features)))
+        for i, label in enumerate(self.l):
+            mtx[i, label] = 1
+        return mtx
+
 
 class Featurizer(object):
 
@@ -173,81 +193,39 @@ class Featurizer(object):
         self.featdict = FeatDict()
         self.labels = FeatList()
 
-    def featurize_in_directory(self, basedir):
+    def featurize_in_directory(self, basedir, feature_filt=None):
         self.docs = []
         for fn in sorted(filter(lambda x: not x.endswith('.swp'), listdir(basedir))):
             with open(path.join(basedir, fn)) as f:
                 for l in f:
                     self.labels.append(fn)
                     newd = {}
-                    for k, v in self.extractor(self.tokenizer, l, self.N, padding=True).iteritems():
+                    for k, v in self.extractor(self.tokenizer, l, self.N, padding=False).iteritems():
+                        if feature_filt is not None and k not in feature_filt:
+                            continue
                         featname = self.featdict[k]
                         if featname is None:
+                            # if featdict is frozen
                             continue
                         newd[featname] = min((v, 0xffff))
                     self.docs.append(newd)
-                    #self.docs.append({self.featdict[k]: min((v, 0xffff)) for k, v in self.extractor(self.tokenizer, l, self.N).iteritems()})
         return self.docs
 
-    def get_correlations(self):
-        label_mean, label_dev = self.get_label_mean_dev()
-        self.label_mean = label_mean
-        self.label_dev = label_dev
-        feat_mean, feat_dev = self.get_feat_mean_dev()
-        self.feat_mean = feat_mean
-        self.feat_dev = feat_dev
+    def choose_top_pearson(self, topn=500, strategy='simple'):
+        self.pearson = pearson_mtx(np.array(self.to_dok_matrix().todense()), self.labels.to_dense_mtx())
+        if strategy == 'simple':
+            topfeats = sorted(((i, self.pearson[i, :]) for i in xrange(self.pearson.shape[0])), key=lambda x: np.max(x[1]), reverse=True)[:topn]
+        elif strategy == 'diff':
+            topfeats = sorted(((i, self.pearson[i, :]) for i in xrange(self.pearson.shape[0])), key=lambda x: abs(x[1][0] - x[1][1]), reverse=True)[:topn]
 
-    def get_feat_mean_dev(self):
-        m = [0 for _ in xrange(len(self.featdict))]
-        msq = [0 for _ in xrange(len(self.featdict))]
+        self.topngrams = set(i[0] for i in topfeats)
+
+    def save_features(self, stream):
         for doc in self.docs:
-            for feat, val in doc.iteritems():
-                m[feat] += val
-                msq[feat] += val ** 2
-        N = float(len(self.docs))
-        dev = []
-        for i in xrange(len(m)):
-            msq[i] /= N
-            m[i] /= N
-            dev.append(math.sqrt(msq[i] - m[i] ** 2))
-        return m, dev
-
-    def get_label_mean_dev(self):
-        m = [0 for _ in range(len(self.labels))]
-        for label in self.labels:
-            m[label] += 1
-        dev = []
-        for i in xrange(len(m)):
-            m[i] = m[i] / float(len(self.docs))
-            dev.append(math.sqrt(m[i] - m[i] ** 2))
-        return m, dev
-
-    def label_feat_pearson(self):
-        pearson = [[0 for i in range(len(self.labels))] for _ in range(len(self.featdict))]
-        for doc_i, doc in enumerate(self.docs):
-            doc_label = self.labels[doc_i]
-            for i in xrange(len(self.featdict)):
-                doc_val = doc.get(i, 0)
-                pdoc = (doc_val - self.feat_mean[i])
-                for lab_i in xrange(len(self.labels.features)):
-                    lab_val = 1 if doc_label == lab_i else 0
-                    pval = lab_val - self.label_mean[lab_i]
-                    pearson[i][lab_i] += pdoc * pval
-        for i in xrange(len(pearson)):
-            for j in xrange(len(pearson[0])):
-                if not self.feat_dev[i] == 0 and not self.label_dev[lab_i] == 0:
-                    pearson[i][j] /= (self.feat_dev[i] * self.label_dev[j]) * len(self.docs)
-                else:
-                    pearson[i][j] = 0
-        self.pearson = pearson
-
-    def save_features(self, fn):
-        with open(fn, 'w') as f:
-            for doc in self.docs:
-                out_l = []
-                for ngram in self.topngrams:
-                    out_l.append(doc.get(ngram, 0))
-                f.write(' '.join(map(str, out_l)) + '\n')
+            out_l = []
+            for ngram in self.topngrams:
+                out_l.append(doc.get(ngram, 0))
+            stream.write(' '.join(map(str, out_l)) + '\n')
 
     def filter_ngrams(self, docs, filt):
         feat_filt = []
@@ -269,8 +247,15 @@ class Featurizer(object):
                     feat_filt[-1][feat] = val
         self.docs = feat_filt
 
+    def write_pearson(self, fn, filter_top=False):
+        with open(fn, 'w') as f:
+            for i, p in enumerate(self.pearson):
+                if filter_top and not i in self.topngrams:
+                    continue
+                f.write(u'{}\t{}\n'.format(self.featdict.rev_lookup(i), '\t'.join(map(str, p))).encode('utf8'))
+
     def to_dok_matrix(self):
-        mtx = dok_matrix((len(self.docs), len(self.featdict)), dtype=np.int16)
+        mtx = dok_matrix((len(self.docs), len(self.featdict)), dtype=np.int64)
         for i, doc in enumerate(self.docs):
             for j, val in doc.iteritems():
                 mtx[(i, j)] = val
@@ -281,7 +266,7 @@ class Featurizer(object):
         for l in stream:
             doc_feats = extractor(tokenizer, l, N=N)
             documents.append(doc_feats)
-        feat_mtx = dok_matrix((len(documents), len(all_features)), dtype=np.int16)
+        feat_mtx = dok_matrix((len(documents), len(all_features)), dtype=np.int65)
         for i, doc in enumerate(documents):
             for feat, v in doc.iteritems():
                 if not feat in feat_d:
