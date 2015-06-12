@@ -1,52 +1,48 @@
-from sys import stderr, stdin, argv
+from sys import stderr, stdin
+from os import listdir
 from model import Representation
+from argparse import ArgumentParser
 import numpy as np
+import logging
+
+
+def parse_args():
+    p = ArgumentParser()
+    p.add_argument('-e', '--encoder', type=str, default='dummy')
+    p.add_argument('-c', '--classifier', type=str, default='simple')
+    p.add_argument('params', nargs='*')
+    p.add_argument('--lang-map', type=str, default='dat/t1/train')
+    p.add_argument('--train', type=str)
+    p.add_argument('--test', type=str)
+    return p.parse_args()
 
 
 def main():
-    lang_map = {
-        0: 'bg',
-        1: 'bs',
-        2: 'cz',
-        3: 'es-AR',
-        4: 'es-ES',
-        5: 'hr',
-        6: 'id',
-        7: 'mk',
-        8: 'my',
-        9: 'pt-BR',
-        10: 'pt-PT',
-        11: 'sk',
-        12: 'sr',
-        13: 'xx',
-    }
-#    lang_map = {
-#        0: 'bs',
-#        1: 'cz',
-#        2: 'hr',
-#        3: 'sk',
-#        4: 'sr',
-#    }
-    lang_map = {
-        0: 'bs',
-        1: 'hr',
-        2: 'sr',
-    }
-    lang_map = {
-        0: 'pt-BR',
-        1: 'pt-PT',
-    }
-    mtx = np.loadtxt(stdin, np.float)
+    FORMAT = '%(asctime)s %(levelname)s %(message)s'
+    logging.basicConfig(format=FORMAT)
+    logging.getLogger().setLevel(logging.INFO)
+    args = parse_args()
+    lang_map = {i: fn for i, fn in enumerate(sorted(listdir(args.lang_map)))}
+    with open(args.train) as stream:
+        mtx = np.loadtxt(stream, np.int16)
     labels = mtx[:, 0]
     train = mtx[:, 1:]
-    r = Representation('dummy', 'svm', rbm_hiddenDimension=10, simple_field=3, pca_dimension=50, svm_ktype='svc', svm_kernel='linear')
+    kwargs = {}
+    for a in args.params:
+        k, v = a.split('=')
+        try:
+            v = int(v)
+        except:
+            pass
+        kwargs[k] = v
+    r = Representation(args.encoder, args.classifier, **kwargs)
     r.encode(train)
-    stderr.write('Encoded\n')
+    logging.info('Matrix encoded')
     r.train_classifier(labels)
-    stderr.write('Trained\n')
+    logging.info('Model trained')
     acc = 0
     N = 0
-    with open(argv[1]) as f:
+    with open(args.test) as f:
         for l in f:
             fs = l.strip().split()
             lab = int(fs[0])
