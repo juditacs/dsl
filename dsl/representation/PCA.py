@@ -14,7 +14,7 @@ class PcaEncoder(object):
         #print(self.model.explained_variance_ratio_)
 
     def encode(self, vector):
-        return self.model.transform(vector).transpose()
+        return self.model.transform(vector)
 
     @property
     def repr_model(self):
