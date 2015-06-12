@@ -27,4 +27,5 @@ Download this year's training and development datasets and split them to one fil
 4. --classifier: name of the classifier
 5. params: positional arguments, i.e. anything without a --, these arguments split by '=' and passed to the Representation constructor as keyword arguments. For example pca\_latentDimension=50 is converted to a parameter, where the key ia pca\_latentDimension and its value is 50.
 
+
     python dsl/representation/run_experiment.py --train train_matrix --test dev_matrix --lang-map dat/t1/train --encoder pca --class svm svm_ktype=linearsvc pca_latentDimension=50 > out
