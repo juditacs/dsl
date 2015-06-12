@@ -15,7 +15,8 @@ def main():
     for l in stdin:
         sumA = 0
         sumN = 0
-        stat = json.loads(l.strip().split('\t')[-1])
+        fs = l.strip().split('\t')
+        stat = json.loads(fs[-1])
         for group, members in sorted(groups.items()):
             N = 0
             acc = 0
@@ -27,6 +28,7 @@ def main():
                 sumN += N
                 sumA += acc
             if N > 0:
+                print(', '.join(fs[:-1]))
                 print('{0}: {1} {2}'.format(group, ','.join(members), float(acc) / N))
         print('Acc: {0}'.format(float(sumA) / sumN))
         print('==============================')
