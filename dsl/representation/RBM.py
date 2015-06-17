@@ -29,7 +29,7 @@ class RbmEncoder(object):
     @property
     def repr_model(self):
         if self._repr_model is None:
-            self._repr_model = np.zeros((len(self.data), self.hiddenDimension))
+            self._repr_model = np.zeros((len(self.data), self.latentDimension))
             for i, d in enumerate(self.data):
                 encoded = self.encode(d)
                 self._repr_model[i] = encoded
