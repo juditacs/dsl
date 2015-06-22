@@ -4,30 +4,35 @@ _ZERO_THRESHOLD = 1e-9  # Everything below this is zero
 
 __author__ = "Micha Kalfon"
 
+
 class IpcaEncoder(object):
 
     def __init__(self, latentDimension):
         self.latentDimension = latentDimension
         self.sampleDimension = None
         self.model = None
-        
+
     def trainOne(self, vector):
         if self.model is None:
             # The size of the vector
             self.sampleDimension = vector.shape[0]
             self.model = IPCA(self.sampleDimension, self.latentDimension)
         self.model.update(np.matrix(vector).transpose())
-        
+
     def train(self, matrix):
         for row in matrix:
             self.trainOne(row)
         #np.apply_along_axis(self.trainOne, axis=1, arr=matrix )
-        
+
     def encode(self, vector):
         if self.model is None:
             raise "The model is not trained, yet"
         # Select the first n PCA components and multiple the vector with it.
         return self.model.components.transpose() * np.matrix(vector).transpose()
+
+    @property
+    def repr_model(self):
+        return self.model
 
     def getModel(self):
         return self.model.components
