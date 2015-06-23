@@ -3,6 +3,7 @@ from os import listdir
 from model import Representation
 from argparse import ArgumentParser
 from sklearn.preprocessing import scale
+from scipy.io import mmread
 import numpy as np
 import logging
 
@@ -25,8 +26,11 @@ def main():
     logging.getLogger().setLevel(logging.INFO)
     args = parse_args()
     lang_map = {i: fn for i, fn in enumerate(sorted(listdir(args.lang_map)))}
-    with open(args.train) as stream:
-        mtx = np.loadtxt(stream, np.float64)
+    if args.train.endswith('.mtx'):
+        mtx = mmread(args.train)
+    else:
+        with open(args.train) as stream:
+            mtx = np.loadtxt(stream, np.float64)
     labels = mtx[:, 0]
     if args.scale:
         train = scale(mtx[:, 1:], with_mean=False)
