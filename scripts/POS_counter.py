@@ -4,9 +4,10 @@ from nltk.corpus import cess_esp
 from nltk import UnigramTagger as ut
 from pickle import load
 from collections import Counter
+import sys
 
 def main():
-    f = open("es-ES")
+    f = open(sys.argv[1])
     cnt = Counter()
     #load the training tagger
     input = open('uni_tag.pkl', 'rb')
