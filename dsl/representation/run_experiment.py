@@ -27,7 +27,7 @@ def main():
     args = parse_args()
     lang_map = {i: fn for i, fn in enumerate(sorted(listdir(args.lang_map)))}
     if args.train.endswith('.mtx'):
-        mtx = mmread(args.train)
+        mtx = mmread(args.train).todense()
     else:
         with open(args.train) as stream:
             mtx = np.loadtxt(stream, np.float64)
