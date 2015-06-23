@@ -2,6 +2,7 @@ from sys import stderr, stdin
 from os import listdir
 from model import Representation
 from argparse import ArgumentParser
+from sklearn.preprocessing import scale
 import numpy as np
 import logging
 
@@ -12,6 +13,7 @@ def parse_args():
     p.add_argument('-c', '--classifier', type=str, default='simple')
     p.add_argument('params', nargs='*')
     p.add_argument('--lang-map', type=str, default='dat/t1/train')
+    p.add_argument('--scale', action='store_true', default=False)
     p.add_argument('--train', type=str)
     p.add_argument('--test', type=str)
     return p.parse_args()
@@ -26,7 +28,10 @@ def main():
     with open(args.train) as stream:
         mtx = np.loadtxt(stream, np.int16)
     labels = mtx[:, 0]
-    train = mtx[:, 1:]
+    if args.scale:
+        train = scale(mtx[:, 1:], with_mean=False)
+    else:
+        train = mtx[:, 1:]
     kwargs = {}
     for a in args.params:
         k, v = a.split('=')
