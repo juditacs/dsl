@@ -26,7 +26,7 @@ def main():
     args = parse_args()
     lang_map = {i: fn for i, fn in enumerate(sorted(listdir(args.lang_map)))}
     with open(args.train) as stream:
-        mtx = np.loadtxt(stream, np.int16)
+        mtx = np.loadtxt(stream, np.float64)
     labels = mtx[:, 0]
     if args.scale:
         train = scale(mtx[:, 1:], with_mean=False)
