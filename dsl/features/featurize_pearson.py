@@ -18,7 +18,7 @@ def parse_args():
     p.add_argument('--topn', type=int, default=200)
     p.add_argument('--train-out', type=str)
     p.add_argument('--test-out', type=str)
-    p.add_argument('--strategy', choices=['simmple', 'diff'], default='simple')
+    p.add_argument('--strategy', choices=['simple', 'diff'], default='simple')
     return p.parse_args()
 
 
@@ -33,11 +33,13 @@ def main():
     N = args.N
     t = Tokenizer(filter_punct=True, ws_norm=True, strip=True, replace_digits=True)
     train_f = Featurizer(t, N=N)
+    ngram_filt = None
     if args.train_mtx and path.exists(args.train_mtx):
         train_f.load_matrix(args.train_mtx)
     else:
         ngrams = CharacterNgram(t)
         ngrams.count_in_directory(args.train, N=N, padding=False)
+        logging.info('{} ngrams'.format(len(ngrams.ngrams)))
         ngram_filt = ngrams.get_frequent(threshold=args.threshold)
         train_f.featurize_in_directory(args.train, feature_filt=ngram_filt)
         logging.info('Featurized')
@@ -48,7 +50,8 @@ def main():
         with open(args.train_out, 'w') as f:
             train_f.save_features(f)
         if args.train_mtx:
-            train_f.save_matrix(args.train_mtx)
+            #train_f.save_matrix(args.train_mtx)
+            train_f.save_docs_and_dense_mtx(args.train_mtx)
         train_f.featdict.freeze_dict()
     test_f = Featurizer(t, N=N)
     if args.test_mtx and path.exists(args.test_mtx):
@@ -60,7 +63,8 @@ def main():
         with open(args.test_out, 'w') as f:
             test_f.save_features(f)
         if args.test_mtx:
-            test_f.save_matrix(args.test_mtx)
+            #test_f.save_matrix(args.test_mtx)
+            test_f.save_docs_and_dense_mtx(args.test_mtx)
     if args.pearson:
         train_f.write_pearson(args.pearson, filter_top=True)
 

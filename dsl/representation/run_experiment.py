@@ -15,6 +15,7 @@ def parse_args():
     p.add_argument('params', nargs='*')
     p.add_argument('--lang-map', type=str, default='dat/t1/train')
     p.add_argument('--scale', action='store_true', default=False)
+    p.add_argument('--with-probs', action='store_true', default=False)
     p.add_argument('--train', type=str)
     p.add_argument('--test', type=str)
     return p.parse_args()
@@ -58,17 +59,24 @@ def main():
     N = 0
     for vec_ in test_mtx:
         vec = np.ravel(vec_)
-        cl = r.classify_vector(vec)
+        cl = r.classify_vector(vec, with_probs=args.with_probs)
         try:
-            guess = int(cl[0])
+            lab = test_labels[N, 0]
         except IndexError:
-            guess = int(cl + 0.5)
-        lab = test_labels[N, 0]
+            lab = test_labels[N]
         N += 1
+        if args.with_probs:
+            guess = max(enumerate(cl[0, :]), key=lambda x: x[1])[0]
+            print('{0}\t{1}\t{2}'.format('\t'.join(map(str, cl[0, :])), lang_map[guess], lang_map[int(lab)]))
+        else:
+            try:
+                guess = int(cl[0, 0])
+            except IndexError:
+                guess = int(cl + 0.5)
+            print('{0}\t{1}'.format(lang_map[guess], lang_map[int(lab)]))
         if int(guess) == int(lab):
             acc += 1
-        print('{0}\t{1}'.format(lang_map[guess], lang_map[int(lab)]))
-    print(float(acc) / N)
+    #print(float(acc) / N)
 
 if __name__ == '__main__':
     main()

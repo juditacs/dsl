@@ -2,7 +2,7 @@
 from argparse import ArgumentParser
 from collections import defaultdict
 from sys import stderr
-from nltk.tokenize import word_tokenize
+from dsl.features.featurize import Tokenizer
 import math
 import os
 import re
@@ -25,6 +25,8 @@ def parse_args():
     p.add_argument('--rare', type=int, default=5)
     p.add_argument('--N', type=int, default=3)
     p.add_argument('--lower', action='store_true', default=False)
+    p.add_argument('--filter-punct', action='store_true', default=False)
+    p.add_argument('--replace-digits', action='store_true', default=False)
     p.add_argument('--tokenize', choices=['ngram', 'word', 'mixed'], default='word')
     p.add_argument('--dump-keywords', type=str, default='')
     return p.parse_args()
@@ -41,10 +43,8 @@ def normalize_word(word):
 
 def tokenize(doc, args):
     if args.tokenize == 'word' or args.tokenize == 'mixed':
-        for word in word_tokenize(doc[0].lower() + doc[1:]):
-            tr = normalize_word(word)
-            if tr:
-                yield tr
+        for word in t.tokenize_line(doc):
+            yield word
     if args.tokenize == 'ngram' or args.tokenize == 'mixed':
         N = args.N
         for i in xrange(0, len(doc) - N + 1):
@@ -72,10 +72,8 @@ def tf(doc_stream, args):
 def tf_lognorm(doc_stream, args):
     tf = defaultdict(int)
     for line in doc_stream:
-        for word in tokenize(line.decode('utf8').strip(), args):
-            trimmed = normalize_word(word)
-            if trimmed:
-                tf[trimmed] += 1
+        for word in t.tokenize_line(line):
+            tf[word] += 1
     tf_log = {}
     for term, cnt in tf.iteritems():
         tf_log[term] = math.log(1 + cnt)
@@ -85,20 +83,16 @@ def tf_lognorm(doc_stream, args):
 def tf_binary(doc_stream, args):
     tf = defaultdict(int)
     for line in doc_stream:
-        for word in tokenize(line.decode('utf8').strip(), args):
-            trimmed = normalize_word(word)
-            if trimmed:
-                tf[trimmed] = 1
+        for word in t.tokenize_line(line):
+            tf[word] = 1
     return tf
 
 
 def tf_rawfreq(doc_stream, args):
     tf = defaultdict(int)
     for line in doc_stream:
-        for word in tokenize(line.decode('utf8').strip(), args):
-            trimmed = normalize_word(word)
-            if trimmed:
-                tf[trimmed] += 1
+        for word in t.tokenize_line(line):
+            tf[word] += 1
     return tf
 
 
@@ -169,14 +163,14 @@ def train(args):
 
 
 def test(tfidf, idf, args):
-    langs = sorted(os.listdir(args.test))
+    langs = sorted(os.listdir(args.train))
     results = defaultdict(lambda: defaultdict(int))
     for fn in sorted(os.listdir(args.test)):
         with open(os.path.join(args.test, fn)) as f:
             for doc in f:
-                guess, allguess = classify_text(doc.decode('utf8'), tfidf, idf)
-                prob_str = ' '.join(str(allguess.get(l, 0)) for l in langs)
-                print('{0} {1} {2} {3} {4}'.format(langs.index(fn), langs.index(guess[0]), prob_str, len(doc.decode('utf8').split()), len(allguess)))
+                guess, allguess = classify_text(doc, tfidf, idf)
+                prob_str = '\t'.join(str(allguess.get(l, 0)) for l in langs)
+                print('{0}\t{1}\t{2}\t{3}\t{4}'.format(doc.rstrip('\n'), langs.index(guess[0]), prob_str, len(doc.decode('utf8').split()), len(allguess)))
                 results[fn][guess[0]] += 1
     return results
 
@@ -200,10 +194,8 @@ def classify_text(doc, tfidf, idf):
 
 def get_test_terms(doc, idf):
     words = defaultdict(int)
-    for w in doc.split():
-        tr = normalize_word(w)
-        if tr:
-            words[tr] += 1
+    for word in t.tokenize_line(doc):
+        words[word] += 1
     weights = {}
     max_f = max(words.iteritems(), key=lambda x: x[1])[1]
     for word, f in words.iteritems():
@@ -243,8 +235,6 @@ def main():
                 for term, score in sorted(terms.iteritems(), key=lambda x: -x[1]):
                     f.write(u'{0}\t{1}\t{2}\n'.format(lang, term, score).encode('utf8'))
     t = test(tfidf, idf, args)
-    for lang, s in sorted(in_test.iteritems()):
-        print lang, len(s)
     stats = print_stats(t)
     with open('res/global_stats', 'a+') as f:
         if args.comment:
@@ -254,4 +244,5 @@ def main():
 
 if __name__ == '__main__':
     args = parse_args()
+    t = Tokenizer(lower=args.lower, filter_punct=args.filter_punct, ws_norm=True, strip=True, replace_digits=args.replace_digits)
     main()

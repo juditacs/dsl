@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import string
 import re
 import math
@@ -6,7 +7,7 @@ from os import listdir, path
 from sys import stderr
 from collections import defaultdict
 from nltk.tokenize import word_tokenize
-from scipy.sparse import dok_matrix, lil_matrix
+from scipy.sparse import dok_matrix, lil_matrix, coo_matrix
 from scipy.io import mmread, mmwrite
 import numpy as np
 from sklearn.preprocessing import scale
@@ -28,7 +29,8 @@ class Tokenizer(object):
         if self.to_lower:
             self.trim_chain.append(lambda x: x.lower())
         if self.filter_punct:
-            punct_re = re.compile(r'[{0}]'.format(re.escape(string.punctuation)), re.UNICODE)
+            punct_str = string.punctuation + '…«­–´·’»”“„'
+            punct_re = re.compile(r'[{0}]'.format(re.escape(punct_str)), re.UNICODE)
             self.trim_chain.append(lambda x: punct_re.sub(' ', x))
         if self.ws_norm:
             ws_re = re.compile(r'\s+', re.UNICODE)
@@ -36,7 +38,7 @@ class Tokenizer(object):
         if self.to_strip:
             self.trim_chain.append(lambda x: x.strip())
         if self.replace_digits:
-            digit_re = re.compile(r'[0-9]+', re.UNICODE)
+            digit_re = re.compile(r'[0-9,.-]+', re.UNICODE)
             self.trim_chain.append(lambda x: digit_re.sub('0', x))
 
     def trim_text(self, text):
@@ -63,7 +65,7 @@ class WordNgram(object):
         if padding:
             self.padding = ['*PAD*'] * (N - 1)
         else:
-            self.paddin = False
+            self.padding = False
 
     def count_in_file(self, basedir, N, padding=False):
         with open(path.join(basedir, fn)) as f:
@@ -123,7 +125,7 @@ class CharacterNgram(object):
                 text = (' ' * (N - 1)).join(sentence)
             else:
                 text = ' '.join(sentence)
-            CharacterNgram.count_ngrams(text, cnt, N, padding)
+            CharacterNgram.count_ngrams(text, cnt, N, padding, include_shorter=False)
         return cnt
 
     @staticmethod
@@ -241,6 +243,15 @@ class FeatList(object):
     def append(self, item):
         self.l.append(self.features[item])
 
+    def to_dok_mtx(self):
+        mtx = dok_matrix((len(self.l), len(self.features)))
+        for i, label in enumerate(self.l):
+            mtx[i, label] = 1
+        return mtx
+
+    def to_csc_mtx(self):
+        return self.to_dok_mtx().tocoo().tocsc()
+
     def to_dense_mtx(self):
         mtx = np.zeros((len(self.l), len(self.features)))
         for i, label in enumerate(self.l):
@@ -256,12 +267,14 @@ class Featurizer(object):
         self.extractor = extractor
         self.featdict = FeatDict()
         self.labels = FeatList()
+        self.txt = []
 
     def featurize_in_directory(self, basedir, feature_filt=None):
         self.docs = []
         for fn in sorted(filter(lambda x: not x.endswith('.swp'), listdir(basedir))):
             with open(path.join(basedir, fn)) as f:
                 for l in f:
+                    self.txt.append(l.decode('utf8').rstrip('\n'))
                     self.labels.append(fn)
                     newd = {}
                     for k, v in self.extractor(l, self.tokenizer, self.N, padding=False).iteritems():
@@ -276,7 +289,7 @@ class Featurizer(object):
         return self.docs
 
     def choose_top_pearson(self, topn=500, strategy='simple'):
-        self.pearson = pearson_mtx(np.array(self.dok_matrix.todense()), self.labels.to_dense_mtx())
+        self.pearson = pearson_mtx(self.dok_matrix.tocoo().tocsc(), self.labels.to_csc_mtx())
         if strategy == 'simple':
             topfeats = sorted(((i, self.pearson[i, :]) for i in xrange(self.pearson.shape[0])), key=lambda x: np.max(x[1]), reverse=True)[:topn]
         elif strategy == 'diff':
@@ -302,9 +315,9 @@ class Featurizer(object):
             stream.close()
 
     def to_filtered_matrix(self):
-        mtx = lil_matrix((self.dok_matrix.shape[0], len(self.topngrams)), dtype=np.float64)
+        mtx = coo_matrix((self.dok_matrix.shape[0], len(self.topngrams)), dtype=np.float64)
         j = 0
-        cs = self.dok_matrix.tocsc()
+        cs = self.dok_matrix.tocoo().tocsc()
         cs = scale(cs, with_mean=False)
         for i in xrange(cs.shape[1]):
             col = cs[:, i]
@@ -314,11 +327,11 @@ class Featurizer(object):
         self._dok_matrix = mtx.todok()
 
     def save_by_doc(self, stream):
-        for doc in self.docs:
+        for i, doc in enumerate(self.docs):
             out_l = []
             for ngram in self.topngrams:
                 out_l.append(doc.get(ngram, 0))
-            stream.write(' '.join(map(str, out_l)) + '\n')
+            stream.write(u'{0}\t{1}\n'.format(self.txt[i], ' '.join(map(str, out_l))).encode('utf8'))
 
     def filter_ngrams(self, docs, filt):
         feat_filt = []
@@ -354,10 +367,31 @@ class Featurizer(object):
         return self._dok_matrix
 
     def load_matrix(self, fn):
-        self._dok_matrix = mmread(fn)
+        try:
+            self._dok_matrix = mmread(fn)
+        except ValueError:
+            table = []
+            #FIXME dirty hack
+            if not path.exists(fn):
+                fn = fn + '.feat'
+            with open(fn) as f:
+                for l in f:
+                    fs = l.decode('utf8').split('\t')
+                    self.txt.append(fs[0])
+                    table.append(map(float, fs[1].split()))
+            self._dok_matrix = coo_matrix((len(table), len(table[0])), dtype=np.float64)
+            for i, row in enumerate(table):
+                self._dok_matrix[i] = row
 
     def save_matrix(self, fn):
         mmwrite(fn, self.dok_matrix)
+
+    def save_docs_and_dense_mtx(self, fn, matrix=None):
+        if matrix is None:
+            matrix = self.dok_matrix
+        with open(fn, 'w') as f:
+            for i, row in enumerate(matrix.todense()):
+                f.write('{0}\t{1}\n'.format(self.txt[i].encode('utf8'), ' '.join(str(row[0, j]) for j in xrange(matrix.shape[1]))))
 
     def save_as_dense_matrix(self, fn, matrix=None):
         if matrix is None:
@@ -377,6 +411,7 @@ class Featurizer(object):
         documents = []
         for l in stream:
             doc_feats = extractor(l, tokenizer, N=N)
+            self.txt.append(l.decode('utf8').rstrip('\n'))
             documents.append(doc_feats)
         feat_mtx = dok_matrix((len(documents), len(all_features)), dtype=np.float64)
         for i, doc in enumerate(documents):
@@ -399,6 +434,7 @@ class BigramModel(Featurizer):
         self.padding = padding
         self.featdict = FeatDict()
         self.labels = FeatList()
+        self.txt = []
 
     def count_in_directory(self, basedir):
         bigrams = defaultdict(int)
@@ -426,7 +462,9 @@ class BigramModel(Featurizer):
         self.docs = []
         for fn in sorted(filter(lambda x: not x.endswith('.swp'), listdir(basedir))):
             with open(path.join(basedir, fn)) as f:
-                for sentence in self.tokenizer.tokenize_stream(f):
+                for line in f:
+                    self.txt.append(line.decode('utf8').rstrip('\n'))
+                    sentence = self.tokenizer.tokenize_line(line)
                     self.labels.append(fn)
                     bigrams = defaultdict(int)
                     if len(sentence) == 0:

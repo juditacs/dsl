@@ -1,5 +1,5 @@
 from encoders import BaseEncoder
-from classifiers import BaseClassifier
+from classifiers import BaseClassifier, LogisticRegressionWrapper
 
 
 class Representation(object):
@@ -23,6 +23,9 @@ class Representation(object):
     def train_classifier(self, labels):
         self.classifier.train(self.encoder.repr_model, labels)
 
-    def classify_vector(self, vector):
+    def classify_vector(self, vector, with_probs=False):
         encoded = self.encoder.encode(vector)
-        return self.classifier.classify_vector(encoded)
+        if isinstance(self.classifier, LogisticRegressionWrapper):
+            return self.classifier.classify_vector(encoded, with_probs)
+        else:
+            return self.classifier.classify_vector(encoded)

@@ -70,5 +70,7 @@ class LogisticRegressionWrapper(BaseClassifier):
     def train(self, model, target):
         self.clf.fit(model, target)
 
-    def classify_vector(self, vector):
+    def classify_vector(self, vector, with_probs=False):
+        if with_probs:
+            return self.clf.predict_proba(vector)
         return self.clf.predict(vector)
