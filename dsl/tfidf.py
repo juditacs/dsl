@@ -4,7 +4,9 @@ from collections import defaultdict
 
 class Tfidf(object):
 
-    def __init__(self, tf, idf, qf, topn, rare, lower):
+    def __init__(self, name, tf, idf, qf, topn, rare, lower):
+        # this is going to be the prefix for features
+        self.name = name
         self.tf_weight = tf
         self.idf_weight = idf
         self.qf_weight = qf
@@ -100,3 +102,13 @@ class Tfidf(object):
             for token in sentence:
                 self.global_freq[token] += 1
                 self.tokens_by_lang[sentence.label][token] += 1
+
+    def score_sentence(self, sentence):
+        #TODO weight
+        score = defaultdict(float)
+        for lang, keywords in self.tfidf.iteritems():
+            for token in sentence:
+                if token in keywords:
+                    score[lang] += keywords[token]
+        for lang, sc in score.iteritems():
+            sentence.features[u'{0}{1}'.format(self.name, lang)] = sc
