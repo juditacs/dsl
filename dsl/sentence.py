@@ -2,16 +2,17 @@
 import re
 import os
 import string
-#from nltk.tokenize import word_tokenize
 
-from feature import FeatureMap
 from tfidf import Tfidf
 
 
 class Sentence(object):
 
     def __init__(self, orig, label):
-        self.orig = orig
+        if isinstance(orig, unicode):
+            self.orig = orig
+        else:
+            self.orig = orig.decode('utf8')
         self.tokens = Tokenizer.trim_and_tokenize(orig)
         self.label = label
         self.features = {}
@@ -20,6 +21,15 @@ class Sentence(object):
     def __iter__(self):
         for t in self.tokens:
             yield t
+
+    def __unicode__(self):
+        return self.orig
+
+    def __str__(self):
+        return self.orig.encode('utf8')
+
+    def __repr__(self):
+        return str(self)
 
     def __len__(self):
         return len(self.tokens)
@@ -46,10 +56,6 @@ class Sentence(object):
             sent = u'{0}{1}{0}'.format(sp, sent)
         for i in xrange(0, len(sent) - n + 1):
             ngram = u'{0}{1}'.format(self.__prefix, sent[i:i + n])
-#            feat_i = self.feature_map[ngram]
-#            if not feat_i in self.features:
-#                self.features[feat_i] = 0
-#            self.features[feat_i] += 1
             if not ngram in self.features:
                 self.features[ngram] = 0
             self.features[ngram] += 1
@@ -82,7 +88,6 @@ class Tokenizer(object):
     @staticmethod
     def tokenize(text):
         return text.split()
-        #return word_tokenize(text)
 
 
 class SentenceCollection(object):
@@ -109,11 +114,11 @@ class SentenceCollection(object):
             if not name.startswith('featurize_'):
                 continue
             fname = name[10:]
-            print fname
             if fname.startswith('ngram'):
                 self.extract_ngram_features(name)
             elif fname.startswith('tfidf'):
                 self.train_tfidf(name)
+                self.featurize_tfidf()
 
     def train_tfidf(self, name):
         tf = self.config.get(name, 'tf')
@@ -122,11 +127,11 @@ class SentenceCollection(object):
         topn = self.config.getint(name, 'topn')
         rare = self.config.getint(name, 'rare')
         lower = self.config.getboolean(name, 'lower')
-        self.tfidf = Tfidf(tf=tf, idf=idf, qf=qf, topn=topn, rare=rare, lower=lower)
+        self.tfidf = Tfidf(name=name[10:], tf=tf, idf=idf, qf=qf, topn=topn, rare=rare, lower=lower)
         self.tfidf.train(self)
 
     def extract_ngram_features(self, name):
-        fname = name.lstrip('featurize_')
+        fname = name[10:]
         n = self.config.getint(name, 'n')
         padding = self.config.getboolean(name, 'padding')
         lower = self.config.getboolean(name, 'lower')
@@ -134,3 +139,7 @@ class SentenceCollection(object):
         for i, sentence in enumerate(self.sentences):
             sentence.set_prefix(fname)
             sentence.extract_ngram_features(n, lower=lower, padding=padding, shorter_too=shorter_too)
+
+    def featurize_tfidf(self):
+        for sentence in self.sentences:
+            self.tfidf.score_sentence(sentence)
