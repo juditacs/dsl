@@ -95,6 +95,7 @@ class SentenceCollection(object):
     def __init__(self, config):
         self.sentences = []
         self.config = config
+        self.tfidf = None
 
     def __iter__(self):
         for sen in self.sentences:
@@ -117,7 +118,8 @@ class SentenceCollection(object):
             if fname.startswith('ngram'):
                 self.extract_ngram_features(name)
             elif fname.startswith('tfidf'):
-                self.train_tfidf(name)
+                if self.tfidf is None:
+                    self.train_tfidf(name)
                 self.featurize_tfidf()
 
     def train_tfidf(self, name):
