@@ -19,11 +19,18 @@ def main():
     train.read_sentences(args.train, labeled=True)
     train.featurize()
     if args.dev:
-        dev = SentenceCollection()
+        dev = SentenceCollection(config)
         dev.read_sentences(args.dev, labeled=True)
+        dev.tfidf = train.tfidf
         dev.featurize()
+        for s in dev.sentences:
+            try:
+                print('{0}\t{1}'.format(s.label, max(s.features.iteritems(), key=lambda x: x[1])[0][5:]))
+            except ValueError:
+                print('{0}\tun'.format(s.label))
     if args.test:
         test = SentenceCollection()
+        test.tfidf = train.tfidf
         test.read_sentences(args.test, labeled=True)
         test.featurize()
 
